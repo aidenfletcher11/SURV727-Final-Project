@@ -1,0 +1,250 @@
+---
+title: "Final Project Sentiment"
+author: "Aiden Fletcher"
+format: html
+editor: visual
+---
+
+## Setting sentiment getter
+
+```{r}
+library(tidyverse)
+library(tidytext)
+library(reticulate)
+library(huggingfaceR)
+library(nflfastR)
+library(nflreadr)
+```
+
+### Cleaning up each dataset
+
+Jaguars first
+
+```{r}
+jaguars_clean <- duval_posts_raw|>
+  filter(!is.na(body))|>
+  mutate(date_stripped = str_remove(datetime, " GMT.*$"))|>
+  mutate(datetime_parsed = parse_date_time(
+           date_stripped,
+           orders = "b d, Y H:M:S",
+           tz = "EST"
+           )
+         )
+```
+
+Now Hugging Face Model
+
+```{r}
+roberta_model <- hf_load_pipeline(
+  model_id = "spacesedan/reddit-sentiment-analysis-longformer",
+  task = "text-classification"
+)
+```
+
+```{r}
+jaguars_sentiment <- jaguars_clean|>
+  filter(!is.na(body))|>
+  mutate(
+    hf_raw = map(body, ~ roberta_model(.x)),
+    hf_label = map_chr(hf_raw, ~ .x[[1]]$label),
+    hf_score = map_dbl(hf_raw, ~ .x[[1]]$score)
+  )
+
+
+```
+
+Now filtering for the correct dates:
+
+```{r}
+saveRDS(jaguars_sentiment,
+        file = "jaguars_sentiment.rds")
+
+trade_deadline <- as.Date("2025-11-04")
+
+jaguars_sentiment_window <- jaguars_sentiment|>
+  filter(
+    as.Date(datetime_parsed) >= trade_deadline - 21,
+    as.Date(datetime_parsed) >= trade_deadline - 21
+  )
+```
+
+Jaguars is done
+
+Now Cowboys
+
+```{r}
+cowb_clean <- cowboys_posts_raw|>
+  filter(!is.na(body))|>
+  mutate(datetime_parsed = mdy(datetime))
+```
+
+Now getting the dates I want
+
+```{r}
+cowb_clean <- cowb_clean|>
+  filter(
+    as.Date(datetime_parsed) >= trade_deadline - 21,
+    as.Date(datetime_parsed) >= trade_deadline - 21
+  )
+```
+
+Now running the sentiment
+
+```{r}
+MAX_LENGTH <- 512
+
+cowboys_sentiment <- cowb_clean|>
+  filter(!is.na(body))|>
+  filter(str_length(body) <= MAX_LENGTH)|>
+  mutate(
+    hf_raw = map(body, ~ roberta_model(.x)),
+    hf_label = map_chr(hf_raw, ~ .x[[1]]$label),
+    hf_score = map_dbl(hf_raw, ~ .x[[1]]$score)
+  )
+
+saveRDS(cowboys_sentiment,
+        file = "cowboys.sentiment.rds")
+```
+
+Now Colts
+
+```{r}
+colts_clean <- colts_posts_clean|>
+  filter(!is.na(body))|>
+  mutate(datetime_parsed = str_extract(datetime, pattern = "\\d{2}-\\d{2}-\\d{4}"),
+         datetime_parsed = mdy(datetime_parsed))
+```
+
+Getting my date range
+
+```{r}
+colts_clean <- colts_clean|>
+  filter(
+    as.Date(datetime_parsed) >= trade_deadline - 21,
+    as.Date(datetime_parsed) >= trade_deadline - 21
+  )
+```
+
+Now Sentiment Analysis
+
+```{r}
+MAX_LENGTH <- 512
+
+colts_sentiment <- colts_clean|>
+  filter(!is.na(body))|>
+  filter(str_length(body) <= MAX_LENGTH)|>
+  mutate(
+    hf_raw = map(body, ~ roberta_model(.x)),
+    hf_label = map_chr(hf_raw, ~ .x[[1]]$label),
+    hf_score = map_dbl(hf_raw, ~ .x[[1]]$score)
+  )
+
+saveRDS(colts_sentiment,
+        file = "colts_sentiment.rds")
+```
+
+Now lets visualize the before and after trade deadline sentiment
+
+Combining all the datasets
+
+```{r}
+jaguars_sentiment_window <- jaguars_sentiment_window|>
+  select(-date_stripped)
+```
+
+```{r}
+colts_sentiment <- readRDS("colts_sentiment.rds")
+cowboys_sentiment <- readRDS("cowboys.sentiment.rds")
+jaguars_sentiment <- readRDS("jaguars_sentiment.rds")
+```
+
+Combining
+
+```{r}
+all_team_sentiment <- bind_rows(
+  jaguars_sentiment_window|> mutate(team = "Jaguars"),
+  cowboys_sentiment|> mutate(team = "Cowboys"),
+  colts_sentiment|> mutate(team = "Colts")
+)
+
+all_team_sentiment_clean <- all_team_sentiment|>
+  filter(datetime != "2025-11-05")
+
+all_team_sentiment_window <- all_team_sentiment_clean|>
+  filter(
+    datetime_parsed >= trade_deadline - 21,
+    datetime_parsed <= trade_deadline + 21
+    )|>
+  mutate(
+    period = case_when(
+      datetime_parsed < trade_deadline ~ "Before",
+      datetime_parsed > trade_deadline ~ "After",
+      TRUE ~ NA_character_
+    )
+  )
+```
+
+Now the visualization
+
+```{r}
+sent_scored <- all_team_sentiment_window|>
+  filter(!is.na(period))|>
+  mutate(
+    sentiment_score = case_when(
+      hf_label == "very negative" ~ -2,
+      hf_label == "negative"      ~ -1,
+      hf_label == "neutral"       ~  0,
+      hf_label == "positive"      ~  1,
+      hf_label == "very positive" ~  2
+    )
+  )
+
+avg_sent_window <- sent_scored|>
+  group_by(team, period)|>
+  summarize(
+    mean_sentiment = mean(sentiment_score, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+
+avg_wide <- avg_sent_window|>
+  pivot_wider(
+    names_from = period,
+    values_from = mean_sentiment
+  )
+
+avg_wide_sent <- avg_wide |>
+  mutate(
+    team_abbr = case_when(
+      team == "Jaguars" ~ "JAX",
+      team == "Cowboys" ~ "DAL",
+      team == "Colts"   ~ "IND",
+      TRUE              ~ NA_character_
+    ),
+    season = 2025  
+  )
+
+ggplot(avg_wide_sent, aes(x = Before, y = After)) +
+  
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  
+  nflplotR::geom_nfl_logos(
+    aes(team_abbr = team_abbr),
+    width = 0.055
+  ) +
+  
+  geom_text(
+    aes(label = season),
+    nudge_y = -0.015, 
+    size = 3
+  ) +
+  labs(
+    title = "Fan forum sentiment: Before vs After trade deadline",
+    subtitle = "Sentiment from -2 (very negative) to +2 (very positive)",
+    x = "Average sentiment (Before Trade Deadline)",
+    y = "Average sentiment (After Trade Deadline)"
+  ) +
+  theme_minimal()
+```
