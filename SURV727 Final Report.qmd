@@ -1,0 +1,199 @@
+---
+title: "SURV727 Final Report"
+author: Aiden Fletcher
+format: pdf
+editor: visual
+---
+
+# Blockbusters or Blunders:
+
+## A Case Study into the data behind the NFL Trade Deadline
+
+The Github repository for this project can be found at: <https://github.com/aidenfletcher11/SURV727-Final-Project>
+
+## Introduction
+
+The NFL's trade deadline is one of the most iconic days of the football season each year. Coaches, media pundits and fans alike all have something to say about blockbuster trades for players every year. Some of the most impactful trades in NFL history have happened at the deadline: Herschel Walker being traded from the Cowboys to the Vikings, which kickstarted the Cowboys dynasty for years to come, or Christian McCaffrey to the 49ers in 2022, which created an offensive juggernaut good enough for a Superbowl appearance. Additionally, the NFL trade deadline is not just a key moment for teams to improve, it also drives league wide conversations for TV analysts and pundits, with discussions of "winners," "losers," and which teams are now "all in" for a championship.
+
+With the increasing popularity of accessible NFL team and player statistics, it has become easy to analyze to success of NFL trades at the trade deadline. However, fan sentiment around trades is also important for a full analysis of the impact of deadline trades. In this explanatory case study, two critical questions will be analyzed:
+
+**Do teams that make trades for starting level players actually improve with on-field performance?**
+
+**Is fan sentiment around these trade-active teams aligned with actual team performance pre and post deadline?**
+
+To do this, the teams performance in the three week window before and after the trade deadline will be analyzed. Then, this performance will be compared with average sentiment from team forums to see if sentiment aligns with team performance.
+
+## Methodology and Data Sourcing
+
+For this analysis, the window of time chosen was 2022-2025. Every year in the NFL, there are trades that are made before the deadline. Those trades were excluded from the analysis, for the sake of consistency of the pre and post trade window of 3 weeks. Additionally, only teams that made trades for starting level players were analyzed, as they can add a more measurable performance for each teams offense or defense. 3-4 teams were chosen within this window of analysis.
+
+**2022:** Baltimore Ravens (Roquan Smith,) Miami Dolphins (Bradley Chubb,) Jacksonville Jaguars (Calvin Ridley,) and Minnesota Vikings (T.J Hockenson)
+
+**2023:** Seattle Seahawks (Leonard Williams,) Chicago Bears (Montez Sweat,) Buffalo Bills (Rasul Douglas,) Philadelphia Eagles (Kevin Byard)
+
+**2024:** Detroit Lions (Za'Darius Smith,) Washington Commanders (Marshon Lattimore,) Baltimore Ravens (Tre'Davious White)
+
+**2025:** Indianapolis Colts (Sauce Gardner,) Dallas Cowboys (Quinnen Williams, Logan Wilson,) Jacksonville Jaguars (Jakobi Meyers,) Philadelphia Eagles (Jaelan Phillips)
+
+### NFLfastR and NFL statistics
+
+[NFLfastR](https://nflfastr.com/) is a popular R package that uses functions to efficiently scrape NFL play-by-play data going back to 1999. It includes many basic stats per play such as rush yards per play, pass yards per play, whether the play ended in a touchdown, interception, or sack, as well as many other basic measurements by team as well as by player. It also includes advanced statistics, such as EPA (Expected Points added), win probability, and rushing/passing yards over expected.
+
+EPA per play was the statistic used to analyze both the offense and the defense of teams that made a deadline trade. Since the package has play by play data, it needed to be changed into per game data. First, all game data was called from the API from 2022-2025. Then it was wrangled to weekly data for each year, three weeks before the trade deadline and 3 weeks after. It was then filtered into three separate dataframes: one for 2022, 2023, 2024 and 2025, only including the relevant teams for each year. Additionally, each week was coded as before or after the trade deadline for visualization purposes.
+
+### Text Collection and Sentiment Analysis
+
+Next, the sentiment of the forums of teams that made a trade in 2025 were analyzed. The focus was on the 2025 season due to the ease of data collection. Originally, Reddit data from each teams subreddit along with the NFL subreddit was going to be collected using the RedditExtractoR package. However, when using the package, the volume of posts collected using the API did not allow the collection of posts during the needed window of three weeks before and after the trade deadline.
+
+Instead, the sentiment data was collected from three different fan forums for teams that made a trade in 2025. The Jaguars sentiment was scraped from the most popular fan forum, called [Duval Football Fans](https://duvalfootballfans.com/board/1/jaguars-related-discussion). The Dallas Cowboys are one of the most valuable sports franchises on Earth, and as such have a wide selection of fan forums. [Dallas Cowboys Central](http://www.dallascowboyscentral.com/forums/cowboys-stadium.19/) appeared to have the highest amount of activity, and was scraped to gather Cowboy fan's sentiment. The Colts fan sentiment was harder to collect at first. The most popular Indianapolis Colts fan forum was hosted on the official team website at [The Official Indianapolis Colts Forum](https://forums.colts.com/forum/4-colts-football/). However, after a few attempts, this website cannot be scraped. The permissions do not allow a non-human browser to collect information from the site, even after attempting a system pause in the scraper to mimic a natural human. After some digging, the most popular non-official Colts forum site is [Colts Freaks](https://www.coltfreaks.com/forum/forumdisplay.php?f=7).
+
+To scrape each of these forums, all the links were collected to see the structure of the pages of interest. Only football related forum posts and comments were needed, so a function was created for each site to scrape all links to forum posts on the first page, and then move onto the second page by constructing a link and scraping again, iterated to ten total pages to collect enough forum posts to fill the needed window of time before and after the trade deadline. A tibble was created, containing the collected links to forum posts. A final function was created with collected titles, authors, datetime, and content from the tibble of forum post links.
+
+Before analysis, each teams data frame containing author, title, datetime and forum post text was cleaned to only include the three weeks before the trade deadline, and three weeks after. A separate column was added coding each forum post before or after the deadline.
+
+For the sentiment analysis of each forum post, a long-form [Hugging Face Model](https://huggingface.co/spacesedan/reddit-sentiment-analysis-longformer) was iterated across all posts. This model, created by the user Spacesedan, which was trained on Reddit data, is designed for longer form text analysis, with a maximum length of 1024 tokens. It has a five-point sentiment classification, ranging from Very Negative, labelled with a 0, to Very Positive, labelled with a 4. It has an accuracy score of 0.671, with a very obvious limitation of subjective sentiment, such as sarcasm or dark humor. Additionally, the model was only trained in English, but that should not be a limitation on sentiment for American Football. This model was ran on every forum post for each team's data frame, adding three rows to each: the raw result, a row with the numeric score, and a row with the raw score.
+
+## Results
+
+For the analysis, the selected teams were separated by those who traded for an offensive player and those who traded for a defensive player, so comparisons were more valid.
+
+### Team Performance Analysis
+
+#### Offensive EPA Comparison- Before and After the Deadline
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| results: hide
+
+offense_subset <- readRDS("offense_subset")
+
+library(ggplot2)
+ggplot(offense_subset, aes(x = before, y = after)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  
+  nflplotR::geom_nfl_logos(
+    aes(team_abbr = team),
+    width = 0.055
+  ) +
+  
+  geom_text(
+    aes(label = season),
+    nudge_y = -0.025,  
+    size = 3
+  ) +
+  
+  labs(
+    title = "Offensive EPA per play: Before vs After trade Deadline",
+    subtitle = "One team-season, labeled by year",
+    x = "EPA per play (Before Trade Deadline)",
+    y = "EPA per play (After Trade Deadline)"
+  ) +
+  theme_minimal()
+```
+
+Of the teams analyzed from the years of 2022-2025, only three teams made a trade at the deadline for offensive player: The Jacksonville Jaguars twice (2022 and 2025) and the Minnesota Vikings (2022). The above graph visualizes how successful teams were on offense before and after the trade deadline. The X-Axis is EPA per play before the trade deadline, and the Y-axis is EPA per play after the trade deadline. The dotted line with a slope of 1 represents no change. Teams that appear below the dotted line had a lower EPA per play after acquiring an offensive player at the deadline than before acquiring said player. EPA per play was the statistic of interest because it is position-less. No matter your position on offense, if you a benefit to your team you will most likely improve the EPA per play, when controlling for other variables.
+
+Despite the small sample size, only 1 out of the three teams improved on offense: the 2022 Jacksonville Jaguars. The 2025 Jacksonville Jaguars and the 2022 Minnesota Vikings both had less offensive success after the trade deadline.
+
+#### Defensive EPA Comparison- Before and After the Deadline
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| results: hide
+
+defense_subset <- readRDS("defense_subset")
+
+library(ggplot2)
+lims <- range(c(defense_subset$before, defense_subset$after), na.rm = TRUE)
+
+ggplot(defense_subset, aes(x = before, y = after)) +
+  # 1: no-change diagonal
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  
+  # 2: team logos at each team-season point
+  nflplotR::geom_nfl_logos(
+    aes(team_abbr = opponent_team),
+    width = 0.055
+  ) +
+  
+  # 3: year label under each logo
+  geom_text(
+    aes(label = season),
+    nudge_y = -0.015,   # adjust if labels overlap too much
+    size = 3
+  ) +
+  coord_equal(xlim = lims, ylim = lims) +
+  labs(
+    title = " EPA per play allowed: Before vs After trade deadline",
+    subtitle = "One team-season, labeled by year",
+    x = "EPA per play allowed(Before Trade Deadline)",
+    y = "EPA per play allowed(After Trade Deadline)"
+  ) +
+  theme_minimal()
+```
+
+Compared to offensive players, many more teams made a trade for a starting level defensive player during the trade deadline. 12 teams made a trade on the defensive side of the ball during the four year period of analysis. Similarly to the offensive visualization, the dotted line with a slope of 1 represents no change in EPA per play. The X and Y axis are the same. However, the interpretation is slightly different. In this case, the EPA per play is EPA per play allowed by that teams defense. So below the line means that the team of interest's defense improved after acquiring a defensive player. The Seattle Seahawks, 2023 Philadelphia Eagles, Washington Commanders, Chicago Bears and Miami Dolphins all got worse after the trade deadline in their respective years.
+
+Overall, team performance is mixed after acquiring a player at the trade deadline. The offensive sample size is much smaller than the defensive sample size, but overall it is mixed. Of course, this analysis does not consider other confounding variables, such as injuries, strength of schedule, and opponents.
+
+### Team Fan Forum Sentiment Analysis
+
+#### Team Sentiment- Before and After the Deadline
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| results: hide
+
+avg_wide_sent <- readRDS("avg_wide_sent.rds")
+
+library(ggplot2)
+ggplot(avg_wide_sent, aes(x = Before, y = After)) +
+  
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  
+  nflplotR::geom_nfl_logos(
+    aes(team_abbr = team_abbr),
+    width = 0.055
+  ) +
+  
+  geom_text(
+    aes(label = season),
+    nudge_y = -0.015, 
+    size = 3
+  ) +
+  labs(
+    title = "Fan forum sentiment: Before vs After trade deadline",
+    subtitle = "Sentiment from -2 (very negative) to +2 (very positive)",
+    x = "Average sentiment (Before Trade Deadline)",
+    y = "Average sentiment (After Trade Deadline)"
+  ) +
+  theme_minimal()
+```
+
+The above visualization serves as a case study for analyzing team sentiment before and after the trade deadline. It is set up similarly to the offensive performance graph, where teams below the line have a more negative fan sentiment after the trade deadline than before. Jacksonville Jaguars fans were more positive after the trade deadline than before. This is particularly interesting, because the team's offensive EPA per play was worse after the deadline. Fans, despite the less consistent team success, may see something during games that still contributes to an increase in average sentiment. Dallas Cowboys fans, on average, expressed about the same sentiment both before and after the deadline, despite improving in their defensive EPA per play allowed. Colts fans became slightly more negative after the trade deadline, and their performance matches that trend.
+
+However, the overarching trend among the three teams analyzed is that no team's fans were particularly positive before or after the trade deadline. On average, each team's forum posts were more negative than positive. This may be a sampling issue. Fans who are online and in team forums may be more negative about their team in general, because they are taking the time to make these forum posts.
+
+To expand on this for the future, more teams should be included from the designated four year window to see if this lack of connection between team performance and fan online sentiment.
+
+## Discussion and Conclusion
+
+#### Limitations
+
+There are many limitations with this analysis. First, it is a very small sample size, due to the nature of analysis. There are only 32 NFL teams, and every year only a handful even attempt to make a trade at the deadline. Performance results could be expanded back until 1999, which is the limits of this API and dataset. Sentiment would be more challenging. This would most likely have to be done through the Internet Archive packages, and creating custom scrapers for each forum site for each year (if they change.)
+
+Another large limitation of this research is the collection of sentiment data. Forum data does no reflect the thoughts of all fans. For a more accurate sentiment analysis, data would have to be pulled from Reddit, Twitter, Facebook and any other common social media outlet to try and get a more accurate picture of online sentiment. Additionally, many of these fan forums have low membership numbers. In brief audits of these sites, it becomes known that a lot of the same members are posting and responding to each other.
+
+Finally, the biggest limitation of all is the absence of other confounding variables that could effect team performance or sentiment. Creating entire performance models for the NFL is difficult as variables such as injuries, team win/loss, strength of opponent, offensive rank vs opponents defense, and defensive rank against opponents offense. For example, the Indianapolis Colts in 2025 traded for a top cornerback (Sauce Gardner). However, in his first week with the team he suffered an injury, and the colts lost a lot of their momentum from previously in the season. This injury and loss would drive both decreased performance on defense as well as increased negative fan sentiment after the trade deadline. Little factors like injuries can drive team success and therefore fan sentiment.
+
+Additionally, to expand further, a control team should be added. This team should be a team that did not make a trade, to see how their fan sentiment and team performance fared before and after the trade deadline, despite making no trades.
+
+## Conclusion
+
+The results of this case study are mixed. Trading for a player on either offense or defense does not automatically make a team better on that side of the ball. Additionally, fans are overall very negative in online spaces such as forums. However, this is a useful exploratory case study into comparing team performance with trade deadline move and fan sentiment about these teams in a window before and after a trade was made.
