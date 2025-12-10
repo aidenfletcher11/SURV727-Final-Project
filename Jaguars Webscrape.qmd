@@ -1,0 +1,82 @@
+---
+title: "Jaguars Forum Webscrape"
+format: html
+editor: visual
+---
+
+## Duvalfootballfans.com Webscrape
+
+```{r}
+library(rvest)
+library(tidyverse)
+library(purrr)
+library(lubridate)
+```
+
+Scraping links from the page
+
+```{r}
+page1 <- read_html("https://duvalfootballfans.com/board/1/jaguars-related-discussion")
+
+raw_threads <- page1|>
+  html_elements("a")|>
+  html_attr("href")|>
+  unique()
+
+raw_threads[1:50]
+```
+
+Trying to build a function to scrape
+
+```{r}
+extract_thread_urls_jags <- function(board_page_url){
+  page <- read_html(board_page_url)
+  
+  page|>
+    html_elements(".board-1")|>
+    html_attr("href")|>
+    unique()|>
+    url_absolute(board_page_url)|>
+    tibble(thread_url = _)
+}
+```
+
+```{r}
+board_pages <- paste0("https://duvalfootballfans.com/board/1/jaguars-related-discussion", "?page=", 1:20)
+
+threads_all <- map_dfr(board_pages, extract_thread_urls_jags)|>
+  distinct(thread_url)
+
+nrow(threads_all)
+```
+
+Testing the scraper
+
+```{r}
+test_thread <- read_html(threads_all$thread_url[1])
+
+div_classes <- test_thread |>
+  html_elements("div") |>
+  html_attr("class") |>
+  unique()
+
+div_classes
+```
+
+```{r}
+scrape_thread <- function(thread_url){
+  page <- read_html(thread_url)
+  
+  posts <- page|>
+    html_elements(".content")
+  
+  tibble(
+    thread_url = thread_url,
+    author = posts|> html_element(".first .mini-profile")|> html_text2(),
+    datetime = posts|> html_element(".time")|> html_text2(),
+    body = posts|> html_element(".message")|> html_text2()
+  )
+}
+
+duval_posts_raw <- map_dfr(threads_all$thread_url, scrape_thread)
+```

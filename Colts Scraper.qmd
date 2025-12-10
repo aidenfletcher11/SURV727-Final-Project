@@ -1,0 +1,78 @@
+---
+title: "Colts Scraper"
+author: "Aiden Fletcher"
+format: html
+editor: visual
+---
+
+## Colts Forum webscrape
+
+```{r}
+library(rvest)
+library(tidyverse)
+library(purrr)
+library(lubridate)
+```
+
+```{r}
+colts_board_url <- "https://www.coltfreaks.com/forum/forumdisplay.php?f=7"
+
+colts_page1 <- read_html(colts_board_url)
+
+threads_page_colts <- colts_page1 |>
+  html_elements(".alt1 div") |>   
+  html_attr("href") |>                     
+  unique() 
+
+threads_page1[1:20]
+```
+
+Building the scraper function
+
+```{r}
+extract_thread_urls_colts <- function(board_page_url){
+  page <- read_html(board_page_url)
+  
+  page|>
+    html_elements(".alt1 a")|>
+    html_attr("href")|>
+    unique()|>
+    url_absolute("https://www.coltfreaks.com/forum/forumdisplay.php?f=7&order=desc")|>
+    tibble(thread_url = _)
+}
+```
+
+```{r}
+board_pages_colts <- paste0("https://www.coltfreaks.com/forum/forumdisplay.php?f=7&order=desc", "&page=", 1:10)
+
+threads_all_colts <- map_dfr(board_pages_colts, extract_thread_urls_colts)|>
+  distinct(thread_url, .keep_all = TRUE)
+
+nrow(threads_all_colts)
+```
+
+Now to get the contents
+
+```{r}
+scrape_thread_colts <- function(thread_url){
+  page <- read_html(thread_url)
+  
+  posts <- page|>
+    html_elements(".page div")
+  
+  tibble(
+    thread_url = thread_url,
+    author = posts|> html_element(".bigusername")|> html_text2(),
+    datetime = posts|> html_element(".normal+ .normal")|> html_text2(),
+    body = posts|> html_element("hr+ div")|> html_text2()
+  )
+}
+
+colts_posts_raw <- map_dfr(threads_all_colts$thread_url, scrape_thread_colts)
+```
+
+```{r}
+colts_posts_clean <- colts_posts_raw |>
+  filter(!is.na(body), body != "")|>
+  distinct()
+```

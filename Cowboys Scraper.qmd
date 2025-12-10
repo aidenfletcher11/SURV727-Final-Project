@@ -1,0 +1,72 @@
+---
+title: "Cowboys Webscrape"
+author: "Aiden Fletcher"
+format: html
+editor: visual
+---
+
+## Cowboys forum Webscrape
+
+```{r}
+library(rvest)
+library(tidyverse)
+library(purrr)
+library(lubridate)
+```
+
+```{r}
+board_url <- "http://www.dallascowboyscentral.com/forums/cowboys-stadium.19/"
+
+cowboys_page1 <- read_html(board_url)
+
+threads_page1 <- cowboys_page1 |>
+  html_elements(".structItem-title a") |>   
+  html_attr("href") |>                     
+  unique() 
+
+threads_page1[1:50]
+```
+
+Building a Function to Scrape
+
+```{r}
+extract_thread_urls_cowboys <- function(board_page_url){
+  page <- read_html(board_page_url)
+  
+  page|>
+    html_elements(".structItem-title a")|>
+    html_attr("href")|>
+    unique()|>
+    url_absolute("http://www.dallascowboyscentral.com")|>
+    tibble(thread_url = _)
+}
+```
+
+```{r}
+board_pages_cowboys <- paste0("http://www.dallascowboyscentral.com/forums/cowboys-stadium.19/", "page-", 1:5)
+
+threads_all_cowboys <- map_dfr(board_pages_cowboys, extract_thread_urls_cowboys)|>
+  distinct(thread_url, .keep_all = TRUE)
+
+nrow(threads_all_cowboys)
+```
+
+Now the Function
+
+```{r}
+scrape_thread_cowboys <- function(thread_url){
+  page <- read_html(thread_url)
+  
+  posts <- page|>
+    html_elements(".message-cell--main")
+  
+  tibble(
+    thread_url = thread_url,
+    author = posts|> html_element(".message-cell--user")|> html_text2(),
+    datetime = posts|> html_element(".message-attribution-main .u-dt")|> html_text2(),
+    body = posts|> html_element(".bbWrapper")|> html_text2()
+  )
+}
+
+cowboys_posts_raw <- map_dfr(threads_all_cowboys$thread_url, scrape_thread_cowboys)
+```
