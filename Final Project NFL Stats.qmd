@@ -1,0 +1,460 @@
+---
+title: "SURV720 Final Project NFL stats"
+author: Aiden Fletcher
+format: html
+editor: visual
+---
+
+## Setting up the package
+
+```{r}
+library(nflfastR)
+library(tidyverse)
+library(lubridate)
+library(nflplotR)
+```
+
+Loading in my data, which is team stats from year 2022-2025, and the stats are already calculated
+
+```{r}
+seasons <- 2022:2025
+
+team_week <- calculate_stats(
+  seasons = seasons,
+  summary_level = "week",
+  stat_type = "team",
+  season_type = "REG"
+)
+
+names(team_week)
+```
+
+Defining my trade deadline week each season of analysis
+
+```{r}
+trade_weeks <- tibble(
+  season = c(2022, 2023, 2024, 2025),
+  trade_week = c(8, 8, 9, 9)
+)|>
+  mutate(before_week = trade_week - 3,
+         after_week = trade_week +3
+         )
+```
+
+### 2022 Season
+
+```{r}
+#Getting the correct weeks
+team_week_2022_window <- team_week|>
+  filter(season == 2022)|>
+  mutate(
+    window = case_when(
+      week %in% c(5, 6, 7) ~ "before",
+      week %in% c(9, 10, 11) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+```
+
+```{r}
+#teams to keep for 2022
+teams_keep_2022 <- c("BAL", "MIA", "JAX", "MIN")
+  
+team_week_2022_window <- team_week_2022_window|>
+  filter(team %in% teams_keep_2022)
+
+head(team_week_2022_window)
+```
+
+### 2023 Season
+
+```{r}
+#Getting the correct weeks
+team_week_2023_window <- team_week|>
+  filter(season == 2023)|>
+  mutate(
+    window = case_when(
+      week %in% c(5, 6, 7) ~ "before",
+      week %in% c(9, 10, 11) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+```
+
+```{r}
+teams_keep_2023 <- c("SEA", "CHI", "BUF", "PHI")
+  
+team_week_2023_window <- team_week_2023_window|>
+  filter(team %in% teams_keep_2023)
+
+head(team_week_2023_window)
+```
+
+### 2024 Season
+
+```{r}
+#Getting the correct weeks
+team_week_2024_window <- team_week|>
+  filter(season == 2024)|>
+  mutate(
+    window = case_when(
+      week %in% c(6, 7, 8) ~ "before",
+      week %in% c(10, 11, 12) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+```
+
+```{r}
+teams_keep_2024 <- c("DET", "WAS", "BAL")
+  
+team_week_2024_window <- team_week_2024_window|>
+  filter(team %in% teams_keep_2024)
+
+head(team_week_2024_window)
+```
+
+### 2025 Season
+
+```{r}
+#Getting the correct weeks
+team_week_2025_window <- team_week|>
+  filter(season == 2025)|>
+  mutate(
+    window = case_when(
+      week %in% c(6, 7, 8) ~ "before",
+      week %in% c(10, 11, 12) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+```
+
+```{r}
+teams_keep_2025 <- c("IND", "DAL", "JAX", "PHI")
+  
+team_week_2025_window <- team_week_2025_window|>
+  filter(team %in% teams_keep_2025)
+
+head(team_week_2025_window)
+```
+
+### Created variables of interest
+
+```{r}
+head(team_week_2022_window,1)
+head(team_week_2023_window, 1)
+head(team_week_2024_window, 1)
+head(team_week_2025_window, 1)
+```
+
+## Selecting variables I want in each data frame (offense)
+
+```{r}
+#Making a helper function to get what I need from each year for offense
+make_offense_stats <- function(df){
+  df|>
+    mutate(
+    off_epa_total = passing_epa + rushing_epa,
+    off_epa_per_play = off_epa_total / (attempts + carries),
+    off_total_yards = passing_yards + rushing_yards,
+    off_yards_per_play = off_total_yards / (attempts + carries)
+  )|>
+  select(
+    season, week, window, team, attempts, carries, opponent_team,
+    off_epa_total, passing_epa, rushing_epa, off_epa_per_play,
+    off_total_yards, passing_yards, rushing_yards, off_yards_per_play
+  )
+}
+```
+
+```{r}
+#Getting offensive stats for every year I need
+offense_2022 <- make_offense_stats(team_week_2022_window)
+
+offense_2023 <- make_offense_stats(team_week_2023_window)
+
+offense_2024 <- make_offense_stats(team_week_2024_window)
+
+offense_2025 <- make_offense_stats(team_week_2025_window)
+```
+
+## Selecting variables I want in each *new* data frame (defense)
+
+I have to make a new window df because my previous one only had offensive stats
+
+#### 2022 Stats
+
+```{r}
+#Getting the correct weeks
+team_week_2022_window_def <- team_week|>
+  filter(season == 2022)|>
+  mutate(
+    window = case_when(
+      week %in% c(5, 6, 7) ~ "before",
+      week %in% c(9, 10, 11) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+
+teams_keep_2022 <- c("BAL", "MIA", "JAX", "MIN")
+
+team_week_2022_window_def <- team_week_2022_window_def|>
+  filter(opponent_team %in% teams_keep_2022)
+
+head(team_week_2022_window_def)
+```
+
+#### 2023 Stats
+
+```{r}
+#Getting the correct weeks
+team_week_2023_window_def <- team_week|>
+  filter(season == 2023)|>
+  mutate(
+    window = case_when(
+      week %in% c(5, 6, 7) ~ "before",
+      week %in% c(9, 10, 11) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+
+teams_keep_2023 <- c("SEA", "CHI", "BUF", "PHI")
+
+team_week_2023_window_def <- team_week_2023_window_def|>
+  filter(opponent_team %in% teams_keep_2023)
+
+head(team_week_2023_window_def)
+```
+
+#### 2024 Stats
+
+```{r}
+#Getting the correct weeks
+team_week_2024_window_def <- team_week|>
+  filter(season == 2024)|>
+  mutate(
+    window = case_when(
+      week %in% c(6, 7, 8) ~ "before",
+      week %in% c(10, 11, 12) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+
+teams_keep_2024 <- c("DET", "WAS", "BAL")
+
+team_week_2024_window_def <- team_week_2024_window_def|>
+  filter(opponent_team %in% teams_keep_2024)
+
+head(team_week_2024_window_def)
+```
+
+#### 2025 Stats
+
+```{r}
+#Getting the correct weeks
+team_week_2025_window_def <- team_week|>
+  filter(season == 2025)|>
+  mutate(
+    window = case_when(
+      week %in% c(6, 7, 8) ~ "before",
+      week %in% c(10, 11, 12) ~ "after",
+      TRUE ~ NA_character_
+    )
+  )|>
+  filter(!is.na(window))
+
+teams_keep_2025 <- c("IND", "DAL", "JAX", "PHI")
+
+team_week_2025_window_def <- team_week_2025_window_def|>
+  filter(opponent_team %in% teams_keep_2025)
+
+head(team_week_2025_window_def)
+```
+
+I have to remake the team_windows so I have all the teams, because I selected only the teams I wanted on offense
+
+```{r}
+#Making a helper function to get what I need from each year for defense
+make_defense_stats <- function(df){
+  df|>
+    mutate(
+    off_epa_total = passing_epa + rushing_epa,
+    off_epa_per_play = off_epa_total / (attempts + carries),
+    off_total_yards = passing_yards + rushing_yards,
+    off_yards_per_play = off_total_yards / (attempts + carries)
+  )|>
+  select(
+    season, week, window, opponent_team, attempts, carries,
+    off_epa_total, passing_epa, rushing_epa, off_epa_per_play,
+    off_total_yards, passing_yards, rushing_yards, off_yards_per_play
+  )
+}
+```
+
+Now to get the defensive stats
+
+```{r}
+#Getting offensive stats for every year I need
+defense_2022 <- make_offense_stats(team_week_2022_window_def)
+
+defense_2023 <- make_offense_stats(team_week_2023_window_def)
+
+defense_2024 <- make_offense_stats(team_week_2024_window_def)
+
+defense_2025 <- make_offense_stats(team_week_2025_window_def)
+```
+
+### All stats of interest
+
+```{r}
+offense_2022
+offense_2023
+offense_2024
+offense_2025
+
+defense_2022
+defense_2023
+defense_2024
+defense_2025
+```
+
+### Visualizations
+
+All offense set up and visualization
+
+```{r}
+offense_all <- bind_rows(
+  offense_2022,
+  offense_2023,
+  offense_2024,
+  offense_2025
+)
+
+offense_all_viz <- offense_all|>
+  group_by(season, team, window)|>
+  summarize(
+    off_epa_per_play = mean(off_epa_per_play, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+#Making the columns wide for easier visualization
+offense_all_wide <- offense_all_viz|>
+  select(season, team, window, off_epa_per_play)|>
+  pivot_wider(
+    names_from = window,
+    values_from = off_epa_per_play
+  )
+
+offense_subset <- offense_all_wide |>
+  filter(
+    (season == 2022 & team %in% c("JAX", "MIN")) |
+      (season == 2025 & team == "JAX")
+  )
+
+saveRDS(offense_subset,
+         file = "offense_subset")
+```
+
+Offense Visualization
+
+```{r}
+ggplot(offense_subset, aes(x = before, y = after)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  
+  nflplotR::geom_nfl_logos(
+    aes(team_abbr = team),
+    width = 0.055
+  ) +
+  
+  geom_text(
+    aes(label = season),
+    nudge_y = -0.025,  
+    size = 3
+  ) +
+  
+  labs(
+    title = "Offensive EPA per play: Before vs After trade Deadline",
+    subtitle = "One team-season, labeled by year",
+    x = "EPA per play (Before Trade Deadline)",
+    y = "EPA per play (After Trade Deadline)"
+  ) +
+  theme_minimal()
+```
+
+### Defense Visualization
+
+All defense set up and visualizations
+
+```{r}
+defense_all <- bind_rows(
+  defense_2022,
+  defense_2023,
+  defense_2024,
+  defense_2025
+)
+
+defense_all_viz <- defense_all|>
+  group_by(season, opponent_team, window)|>
+  summarize(
+    off_epa_per_play = mean(off_epa_per_play, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+#Making the columns wide for easier visualization
+defense_all_wide <- defense_all_viz|>
+  select(season, opponent_team, window, off_epa_per_play)|>
+  pivot_wider(
+    names_from = window,
+    values_from = off_epa_per_play
+  )
+
+defense_subset <- defense_all_wide |>
+  filter(
+    (season == 2022 & opponent_team %in% c("BAL", "MIA")) |
+      (season == 2023 & opponent_team %in% c("PHI", "BUF", "CHI", "SEA") |
+         season == 2024 & opponent_team %in% c("DET", "WAS", "BAL") | 
+         season == 2025 & opponent_team %in% c("IND", "DAL", "PHI"))
+  )
+
+saveRDS(defense_subset,
+         file = "defense_subset")
+```
+
+Visualizations
+
+```{r}
+
+lims <- range(c(defense_subset$before, defense_subset$after), na.rm = TRUE)
+
+ggplot(defense_subset, aes(x = before, y = after)) +
+  # 1: no-change diagonal
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  
+  # 2: team logos at each team-season point
+  nflplotR::geom_nfl_logos(
+    aes(team_abbr = opponent_team),
+    width = 0.055
+  ) +
+  
+  # 3: year label under each logo
+  geom_text(
+    aes(label = season),
+    nudge_y = -0.015,   # adjust if labels overlap too much
+    size = 3
+  ) +
+  coord_equal(xlim = lims, ylim = lims) +
+  labs(
+    title = " EPA per play allowed: Before vs After trade deadline",
+    subtitle = "One team-season, labeled by year",
+    x = "EPA per play allowed(Before Trade Deadline)",
+    y = "EPA per play allowed(After Trade Deadline)"
+  ) +
+  theme_minimal()
+```
